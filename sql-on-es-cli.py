@@ -60,15 +60,27 @@ class JsonOutput:
 
 class TableOutput:
     @staticmethod
+    def print_meta(json_obj):
+        took = float(json_obj["took"]) / 1000
+        print "took: %.2f sec." % took
+        print "matches: %d doc(s)" % json_obj["hits"]["total"]
+
+    @staticmethod
     def emit(json_obj):
         if "aggregations" in json_obj:
             TableOutput.print_aggr_output(json_obj)
         else:
             TableOutput.print_docs_output(json_obj)
-    
+        TableOutput.print_meta(json_obj)
+
     @staticmethod
     def print_aggr_output(json_obj):
         pass
+        field_len_map = {}
+        print json_obj
+        TableOutput.get_field_info(json_obj["aggregations"], field_len_map)
+
+        print field_len_map
 
     @staticmethod
     def print_docs_output(json_obj):
@@ -82,18 +94,26 @@ class TableOutput:
 
         # value들 간의 최대 문자열 길이
         for doc in json_obj["hits"]["hits"]:
+            # add _id, _type into _source to print _id, _type easily
             source = doc["_source"]
-            for field in source:
-                if field not in ret_val:
-                    ret_val[field] = {}
+            source["_id"] = doc["_id"]
+            source["_type"] = doc["_type"]
+            TableOutput.get_field_info(source, ret_val)
 
-                    # value 길이와 field 길의 중 max 값
-                    ret_val[field]['len'] = max(len(str(source[field])), len(field))
-                    ret_val[field]['is_str'] = type(source[field]) == str
-                else:
-                    if ret_val[field] < len(str(source[field])):
-                        ret_val[field]['len'] = len(str(source[field]))
         return ret_val
+    
+    @staticmethod
+    def get_field_info(source, ret_val):
+        for field in source:
+            if field not in ret_val:
+                ret_val[field] = {}
+
+                # value 길이와 field 길의 중 max 값
+                ret_val[field]['len'] = max(len(str(source[field])), len(field))
+                ret_val[field]['is_str'] = type(source[field]) == str
+            else:
+                if ret_val[field] < len(str(source[field])):
+                    ret_val[field]['len'] = len(str(source[field]))
 
     @staticmethod
     def print_header(field_len_map):
@@ -142,11 +162,18 @@ class SQLExecutor:
 
         json_obj = self.http_client.get(sql)
         
+        if json_obj.get("status", 200) != 200:
+            print_error(json_obj)
+            return
+
         if self.output_mode == OutputMode.TABLE:
             TableOutput.emit(json_obj)
         else:
             JsonOutput.emit(json_obj)
 
+def print_error(json_obj):
+    print "status: " + str(json_obj.get("status", 200))
+    print "error: " + json_obj.get("error", "")
 
 executor = SQLExecutor(endpoint)
 
