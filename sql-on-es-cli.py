@@ -59,6 +59,10 @@ class JsonOutput:
 
 
 class TableOutput:
+    print_id_type = True
+    id_max_len = 0
+    type_max_len = 0
+
     @staticmethod
     def print_meta(json_obj):
         took = float(json_obj["took"]) / 1000
@@ -84,6 +88,9 @@ class TableOutput:
 
     @staticmethod
     def print_docs_output(json_obj):
+        TableOutput.id_max_len = len("_id")
+        TableOutput.type_max_len = len("_type")
+
         field_len_map = TableOutput.get_field_len_map(json_obj)
         TableOutput.print_header(field_len_map)
         TableOutput.print_data(field_len_map, json_obj)
@@ -94,16 +101,13 @@ class TableOutput:
 
         # value들 간의 최대 문자열 길이
         for doc in json_obj["hits"]["hits"]:
-            # add _id, _type into _source to print _id, _type easily
-            source = doc["_source"]
-            source["_id"] = doc["_id"]
-            source["_type"] = doc["_type"]
-            TableOutput.get_field_info(source, ret_val)
+            TableOutput.get_field_info(doc, ret_val)
 
         return ret_val
     
     @staticmethod
-    def get_field_info(source, ret_val):
+    def get_field_info(doc, ret_val):
+        source = doc["_source"]
         for field in source:
             if field not in ret_val:
                 ret_val[field] = {}
@@ -114,12 +118,31 @@ class TableOutput:
             else:
                 if ret_val[field] < len(str(source[field])):
                     ret_val[field]['len'] = len(str(source[field]))
+        
+        # need to store max len of _id and _type so that print _id, _type
+        if TableOutput.print_id_type:
+            TableOutput.id_max_len = max(TableOutput.id_max_len,
+                                         len(str(doc["_id"])))
+
+            TableOutput.type_max_len = max(TableOutput.type_max_len,
+                                           len(str(doc["_type"])))
+
 
     @staticmethod
     def print_header(field_len_map):
+       
+        # print |_id|_type|field1|...|fieldn|
+        if TableOutput.print_id_type:
+            sys.stdout.write(("| %-" + str(TableOutput.id_max_len) + "s ") % "_id")
+            sys.stdout.write(("| %-" + str(TableOutput.type_max_len) + "s ") % "_type")
         for k in field_len_map:
             sys.stdout.write(("| %-" + str(field_len_map[k]["len"]) + "s ") % k)
         sys.stdout.write("|\n")
+        
+        # print |---|----|...|---|
+        if TableOutput.print_id_type:
+            sys.stdout.write(("|%" + str(TableOutput.id_max_len) + "s") % ("-" * (TableOutput.id_max_len + 2)))
+            sys.stdout.write(("|%" + str(TableOutput.type_max_len) + "s") % ("-" * (TableOutput.type_max_len + 2)))
 
         for k in field_len_map:
             sys.stdout.write(("|%" + str(field_len_map[k]["len"]) + "s") % ("-" * (field_len_map[k]["len"] + 2)))
@@ -128,14 +151,26 @@ class TableOutput:
     @staticmethod
     def print_data(field_len_map, json_obj):
         for doc in json_obj["hits"]["hits"]:
+            if TableOutput.print_id_type:
+                TableOutput.print_id_type(doc)
+
             source = doc["_source"]
             for k in field_len_map:
                 TableOutput.print_field(field_len_map, k, source) 
             sys.stdout.write("|\n")
 
     @staticmethod
+    def print_id_type(doc):
+        id_format = TableOutput.get_str_format(TableOutput.id_max_len, True)
+        type_format = TableOutput.get_str_format(TableOutput.type_max_len, True)
+        
+        sys.stdout.write(id_format % doc["_id"])
+        sys.stdout.write(type_format % doc["_type"])
+        
+    @staticmethod
     def print_field(field_len_map, k, source):
-        str_format = TableOutput.get_str_format(field_len_map[k])
+        str_format = TableOutput.get_str_format(field_len_map[k]["len"],
+                                                field_len_map[k]["is_str"])
         
         v = ""
         if k in source:
@@ -143,13 +178,13 @@ class TableOutput:
         sys.stdout.write(str_format % v)
 
     @staticmethod
-    def get_str_format(field_info):
+    def get_str_format(value_len, is_str):
         # 문자열은 left align, 그외는 right align
         align_sign = ""
-        if field_info['is_str'] == True:
+        if is_str == True:
             align_sign = "-"
 
-        return "| %" + align_sign + str(field_info["len"]) + "s "
+        return "| %" + align_sign + str(value_len) + "s "
         
 class SQLExecutor:
     def __init__(self, endpoint):
