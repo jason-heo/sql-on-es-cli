@@ -79,12 +79,32 @@ class TableOutput:
 
     @staticmethod
     def print_aggr_output(json_obj):
-        pass
-        field_len_map = {}
-        print json_obj["aggregations"]
-        TableOutput.get_field_info(json_obj["aggregations"], field_len_map)
+        JsonOutput.emit(json_obj["aggregations"])
 
-        print field_len_map
+        field_name_order = [] # contains order of group by fields
+        docs = []
+
+        TableOutput.es_output2array(json_obj["aggregations"],
+                                    docs,
+                                    field_name_order)
+    
+    @staticmethod
+    def es_output2array(aggr, docs, field_name_order):
+        TableOutput.visit_aggr_node(aggr, docs, field_name_order)
+    
+    @staticmethod
+    def visit_aggr_node(aggr, docs, field_name_order):
+        for grp_field in aggr: # "aggregations"->"grp_field"
+            for grp_doc in aggr[grp_field]["buckets"]: #"grp_field"->"buckets"[]
+                for sub_key in grp_doc:
+                    if sub_key != "key" and sub_key != "doc_count":
+                        # sub level group by field or actual value
+                        if "buckets" in grp_doc[sub_key]:
+                            TableOutput.visit_aggr_node(grp_doc,
+                                                        docs,
+                                                        field_name_order)
+                        else:
+                            print sub_key, "=>", grp_doc[sub_key]["value"]
 
     @staticmethod
     def print_docs_output(json_obj):
