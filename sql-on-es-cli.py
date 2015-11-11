@@ -66,8 +66,8 @@ class TableOutput:
     @staticmethod
     def print_meta(json_obj):
         took = float(json_obj["took"]) / 1000
-        print "took: %.2f sec." % took
-        print "matches: %d doc(s)" % json_obj["hits"]["total"]
+        doc_count = json_obj["hits"]["total"]
+        print "\n%d doc in set (%.3f sec)\n" % (doc_count, took)
 
     @staticmethod
     def emit(json_obj):
@@ -81,19 +81,24 @@ class TableOutput:
     def print_aggr_output(json_obj):
         pass
         field_len_map = {}
-        print json_obj
+        print json_obj["aggregations"]
         TableOutput.get_field_info(json_obj["aggregations"], field_len_map)
 
         print field_len_map
 
     @staticmethod
     def print_docs_output(json_obj):
+        if len(json_obj["hits"]["hits"]) == 0:
+            print "Empty set\n"
+
         TableOutput.id_max_len = len("_id")
         TableOutput.type_max_len = len("_type")
 
         field_len_map = TableOutput.get_field_len_map(json_obj)
-        TableOutput.print_header(field_len_map)
-        TableOutput.print_data(field_len_map, json_obj)
+
+        if len(json_obj["hits"]["hits"]) > 0:
+            TableOutput.print_header(field_len_map)
+            TableOutput.print_data(field_len_map, json_obj)
 
     @staticmethod
     def get_field_len_map(json_obj):
@@ -120,7 +125,7 @@ class TableOutput:
                     ret_val[field]['len'] = len(str(source[field]))
         
         # need to store max len of _id and _type so that print _id, _type
-        if TableOutput.print_id_type:
+        if TableOutput.print_id_type is True:
             TableOutput.id_max_len = max(TableOutput.id_max_len,
                                          len(str(doc["_id"])))
 
@@ -132,7 +137,7 @@ class TableOutput:
     def print_header(field_len_map):
        
         # print |_id|_type|field1|...|fieldn|
-        if TableOutput.print_id_type:
+        if TableOutput.print_id_type is True:
             sys.stdout.write(("| %-" + str(TableOutput.id_max_len) + "s ") % "_id")
             sys.stdout.write(("| %-" + str(TableOutput.type_max_len) + "s ") % "_type")
         for k in field_len_map:
@@ -140,7 +145,7 @@ class TableOutput:
         sys.stdout.write("|\n")
         
         # print |---|----|...|---|
-        if TableOutput.print_id_type:
+        if TableOutput.print_id_type is True:
             sys.stdout.write(("|%" + str(TableOutput.id_max_len) + "s") % ("-" * (TableOutput.id_max_len + 2)))
             sys.stdout.write(("|%" + str(TableOutput.type_max_len) + "s") % ("-" * (TableOutput.type_max_len + 2)))
 
@@ -151,8 +156,8 @@ class TableOutput:
     @staticmethod
     def print_data(field_len_map, json_obj):
         for doc in json_obj["hits"]["hits"]:
-            if TableOutput.print_id_type:
-                TableOutput.print_id_type(doc)
+            if TableOutput.print_id_type is True:
+                TableOutput._print_id_type(doc)
 
             source = doc["_source"]
             for k in field_len_map:
@@ -160,7 +165,7 @@ class TableOutput:
             sys.stdout.write("|\n")
 
     @staticmethod
-    def print_id_type(doc):
+    def _print_id_type(doc):
         id_format = TableOutput.get_str_format(TableOutput.id_max_len, True)
         type_format = TableOutput.get_str_format(TableOutput.type_max_len, True)
         
