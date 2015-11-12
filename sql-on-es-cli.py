@@ -81,30 +81,36 @@ class TableOutput:
     def print_aggr_output(json_obj):
         JsonOutput.emit(json_obj["aggregations"])
 
-        field_name_order = [] # contains order of group by fields
+        grp_by_fld_info = [] # contains order of group by fields
         docs = []
 
         TableOutput.es_output2array(json_obj["aggregations"],
                                     docs,
-                                    field_name_order)
+                                    grp_by_fld_info)
     
     @staticmethod
-    def es_output2array(aggr, docs, field_name_order):
-        TableOutput.visit_aggr_node(aggr, docs, field_name_order)
+    def es_output2array(aggr, docs, grp_by_fld_info):
+        TableOutput.visit_aggr_node(aggr, docs, grp_by_fld_info)
     
     @staticmethod
-    def visit_aggr_node(aggr, docs, field_name_order):
+    def visit_aggr_node(aggr, docs, grp_by_fld_info):
         for grp_field in aggr: # "aggregations"->"grp_field"
+            if grp_field == "key" or grp_field == "doc_count":
+                continue
             for grp_doc in aggr[grp_field]["buckets"]: #"grp_field"->"buckets"[]
+                grp_by_fld_info.append({grp_field:grp_doc['key']})
                 for sub_key in grp_doc:
                     if sub_key != "key" and sub_key != "doc_count":
                         # sub level group by field or actual value
                         if "buckets" in grp_doc[sub_key]:
                             TableOutput.visit_aggr_node(grp_doc,
                                                         docs,
-                                                        field_name_order)
+                                                        grp_by_fld_info)
                         else:
+                            print grp_by_fld_info
                             print sub_key, "=>", grp_doc[sub_key]["value"]
+                print "======="
+                grp_by_fld_info.pop()
 
     @staticmethod
     def print_docs_output(json_obj):
