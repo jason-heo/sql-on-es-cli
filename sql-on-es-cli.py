@@ -79,26 +79,80 @@ class TableOutput:
 
     @staticmethod
     def print_aggr_output(json_obj):
-        JsonOutput.emit(json_obj["aggregations"])
+        aggr_output = []
+        field_order = []
 
-        docs = []
+        TableOutput.agg_output2arr(json_obj["aggregations"],
+                                   aggr_output,
+                                   field_order)
 
-        TableOutput.es_output2array(json_obj["aggregations"], docs)
-        JsonOutput.emit(docs)
+        TableOutput.print_output(aggr_output, field_order)
+
+    @staticmethod
+    # output: array of dict
+    def print_output(aggr_output, field_order):
+        field_name_len_map = TableOutput.__get_field_len_map(aggr_output,
+                                                             field_order)
+        
+        TableOutput.__print_header(field_order, field_name_len_map)
+        TableOutput.__print_data(aggr_output, field_order, field_name_len_map)
+
+    @staticmethod
+    def __get_field_len_map(aggr_output, field_order):
+        field_name_len_map = {}
+        for field in field_order:
+            field_name_len_map[field] = len(field)
+
+        TableOutput.__set_field_name_len_map(aggr_output, field_name_len_map)
+
+        return field_name_len_map
     
     @staticmethod
-    def es_output2array(aggr, docs):
-        grp_by_fld_info = [] # contains group by field
-        TableOutput.visit_aggr_node(aggr, docs, grp_by_fld_info)
+    def __print_header(field_order, field_name_len_map):
+        # print |field1|field2|field2|...|fieldn|
+        for k in field_order:
+            sys.stdout.write(("| %-" + str(field_name_len_map[k]) + "s ") % k)
+        sys.stdout.write("|\n")
+        
+        # print |---|---|----|...|---|
+        for k in field_order:
+            sys.stdout.write(("|%" + str(field_name_len_map[k]) + "s") % ("-" * (field_name_len_map[k] + 2)))
+        sys.stdout.write("|\n")
     
     @staticmethod
-    def visit_aggr_node(aggr, docs, grp_by_fld_info):
+    def __print_data(aggr_output, field_order, field_name_len_map):
+        for arr in aggr_output:
+            for field in field_order:
+                sys.stdout.write(("| %"+str(field_name_len_map[field])+"s ") % str(arr[field]))
+            sys.stdout.write("|\n")
+
+    @staticmethod
+    def __set_field_name_len_map(output, field_name_len_map):
+        for arr in output:
+            for k in arr:
+                field_name_len_map[k] = max(field_name_len_map[k],
+                                            len(str(arr[k])))
+
+    @staticmethod
+    def agg_output2arr(aggr, docs, field_order):
+        field_hash = {}
+        grp_by_fld_info = {} # contains group by field
+        TableOutput.visit_aggr_node(aggr,
+                                    docs,
+                                    grp_by_fld_info,
+                                    field_order,
+                                    field_hash)
+    
+    @staticmethod
+    def visit_aggr_node(aggr, docs, grp_by_fld_info, field_order, field_hash):
         for grp_field in aggr: # "aggregations"->"grp_field"
             if grp_field == "key" or grp_field == "doc_count":
                 continue
             for grp_doc in aggr[grp_field]["buckets"]: #"grp_field"->"buckets"[]
-                grp_by_fld_info.append({grp_field: grp_doc['key']})
-                aggr_value = grp_by_fld_info[:]
+                if grp_field not in field_hash:
+                    field_order.append(grp_field)
+                    field_hash[grp_field] = True
+                grp_by_fld_info[grp_field] = grp_doc['key']
                 aggr_found = False
                 for sub_key in grp_doc:
                     if sub_key != "key" and sub_key != "doc_count":
@@ -106,14 +160,18 @@ class TableOutput:
                         if "buckets" in grp_doc[sub_key]:
                             TableOutput.visit_aggr_node(grp_doc,
                                                         docs,
-                                                        grp_by_fld_info)
+                                                        grp_by_fld_info,
+                                                        field_order,
+                                                        field_hash)
                         else:
                             aggr_found = True
-                            aggr_value.append({sub_key: grp_doc[sub_key]["value"]})
+                            if sub_key not in field_hash:
+                                field_order.append(sub_key)
+                                field_hash[sub_key] = True
+                            grp_by_fld_info[sub_key] = grp_doc[sub_key]["value"]
+    
                 if aggr_found:
-                    docs.append(aggr_value)
-
-                grp_by_fld_info.pop()
+                    docs.append(grp_by_fld_info.copy())
 
     @staticmethod
     def print_docs_output(json_obj):
