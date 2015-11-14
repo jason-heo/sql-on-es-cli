@@ -67,7 +67,7 @@ class TableOutput:
     def print_meta(json_obj):
         took = float(json_obj["took"]) / 1000
         doc_count = json_obj["hits"]["total"]
-        print "\n%d doc in set (%.3f sec)\n" % (doc_count, took)
+        print "\n%d docs hitted (%.3f sec)\n" % (doc_count, took)
 
     @staticmethod
     def emit(json_obj):
@@ -81,15 +81,14 @@ class TableOutput:
     def print_aggr_output(json_obj):
         JsonOutput.emit(json_obj["aggregations"])
 
-        grp_by_fld_info = [] # contains order of group by fields
         docs = []
 
-        TableOutput.es_output2array(json_obj["aggregations"],
-                                    docs,
-                                    grp_by_fld_info)
+        TableOutput.es_output2array(json_obj["aggregations"], docs)
+        JsonOutput.emit(docs)
     
     @staticmethod
-    def es_output2array(aggr, docs, grp_by_fld_info):
+    def es_output2array(aggr, docs):
+        grp_by_fld_info = [] # contains group by field
         TableOutput.visit_aggr_node(aggr, docs, grp_by_fld_info)
     
     @staticmethod
@@ -98,7 +97,9 @@ class TableOutput:
             if grp_field == "key" or grp_field == "doc_count":
                 continue
             for grp_doc in aggr[grp_field]["buckets"]: #"grp_field"->"buckets"[]
-                grp_by_fld_info.append({grp_field:grp_doc['key']})
+                grp_by_fld_info.append({grp_field: grp_doc['key']})
+                aggr_value = grp_by_fld_info[:]
+                aggr_found = False
                 for sub_key in grp_doc:
                     if sub_key != "key" and sub_key != "doc_count":
                         # sub level group by field or actual value
@@ -107,9 +108,11 @@ class TableOutput:
                                                         docs,
                                                         grp_by_fld_info)
                         else:
-                            print grp_by_fld_info
-                            print sub_key, "=>", grp_doc[sub_key]["value"]
-                print "======="
+                            aggr_found = True
+                            aggr_value.append({sub_key: grp_doc[sub_key]["value"]})
+                if aggr_found:
+                    docs.append(aggr_value)
+
                 grp_by_fld_info.pop()
 
     @staticmethod
