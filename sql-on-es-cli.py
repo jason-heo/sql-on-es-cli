@@ -9,12 +9,11 @@ import httplib
 import urlparse
 import urllib
 
-if len(sys.argv) == 1:
-    sys.stderr.write("Usage: {0} <endpoint>\n\n".format(sys.argv[0]))
-    sys.stderr.write("Ex) {0} http://localhost:9200\n".format(sys.argv[0]))
-    sys.exit(1)
-
-endpoint = sys.argv[1]
+def print_usage():
+        sys.stderr.write("Usage: {0} <endpoint> [-j]\n".format(sys.argv[0]))
+        sys.stderr.write("   -j: print Json Format rather than TABLE\n")
+        sys.stderr.write("\nEx) {0} http://localhost:9200\n".format(sys.argv[0]))
+        sys.exit(1)
 
 hist_file = os.path.join(os.path.expanduser("~"), ".sql-on-es.hist")
 
@@ -26,8 +25,24 @@ except (IOError):
 import atexit
 atexit.register(readline.write_history_file, hist_file)
 
-# readline.parse_and_bind('tab: complete')
-# readline.parse_and_bind('set editing-mode emacs')
+import getopt
+def parseopt():
+    try:
+        optlist, args = getopt.getopt(' '.join(sys.argv[1:]).split(), 'j')
+
+        if len(args) == 0:
+            print_usage()
+            sys.exit(1)
+    except getopt.GetoptError as err:
+        sys.stderr.write("Error: " + str(err) + "\n\n")
+        print_usage()
+        sys.exit(1)
+    
+    output_mode = OutputMode.TABLE
+    
+    if '-j' in dict(optlist):
+        output_mode = OutputMode.JSON
+    return args[0], output_mode
 
 class HttpClient:
     def __init__(self, endpoint):
@@ -36,14 +51,22 @@ class HttpClient:
         self.protocol = o.scheme
         self.hostname = o.hostname
         self.port = o.port
+        
+        if self.protocol == "" or self.hostname == "":
+            sys.stderr.write("Error: invalid url. '" + endpoint + "'\n")
+            sys.exit(1)
     
     def get(self, sql):
-        conn = httplib.HTTPConnection(self.hostname, self.port)
-        conn.request("GET", "/_sql?sql=" + urllib.quote(sql))
+        try:
+            conn = httplib.HTTPConnection(self.hostname, self.port)
+            conn.request("GET", "/_sql?sql=" + urllib.quote(sql))
 
-        response = conn.getresponse()
-
-        return json.loads(response.read())
+            response = conn.getresponse()
+            
+            return json.loads(response.read())
+        except Exception as e:
+            sys.stderr.write("Http Error: %s\n" % str(e))
+            sys.exit(1)
 
 
 class OutputMode:
@@ -226,10 +249,9 @@ class TableOutput:
         sys.stdout.write(str_format % v)
 
 class SQLExecutor:
-    def __init__(self, endpoint):
+    def __init__(self, endpoint, output_mode):
         self.http_client = HttpClient(endpoint)
-        self.output_mode = OutputMode.TABLE
-        # self.output_mode = OutputMode.JSON
+        self.output_mode = output_mode
     
     def run(self, sql):
         if sql.strip() == "": return
@@ -237,7 +259,7 @@ class SQLExecutor:
         json_obj = self.http_client.get(sql)
         
         if json_obj.get("status", 200) != 200:
-            print_error(json_obj)
+            print_es_error(json_obj)
             return
 
         if self.output_mode == OutputMode.TABLE:
@@ -245,17 +267,20 @@ class SQLExecutor:
         else:
             JsonOutput.emit(json_obj)
 
-def print_error(json_obj):
+def print_es_error(json_obj):
     print "status: " + str(json_obj.get("status", 200))
     print "error: " + json_obj.get("error", "")
 
-executor = SQLExecutor(endpoint)
+if __name__ == "__main__":
+    endpoint, output_mode = parseopt()
 
-while True:
-    try:
-        sql = raw_input('SQL> ')
-        executor.run(sql)
-    except (EOFError):
-        break
+    executor = SQLExecutor(endpoint, output_mode)
 
-print "\nexiting..."
+    while True:
+        try:
+            sql = raw_input('SQL> ')
+            executor.run(sql)
+        except (EOFError):
+            break
+
+    print "\nexiting..."
