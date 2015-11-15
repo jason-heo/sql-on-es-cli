@@ -38,7 +38,6 @@ class HttpClient:
         self.port = o.port
     
     def get(self, sql):
-
         conn = httplib.HTTPConnection(self.hostname, self.port)
         conn.request("GET", "/_sql?sql=" + urllib.quote(sql))
 
@@ -64,18 +63,23 @@ class TableOutput:
     type_max_len = 0
 
     @staticmethod
-    def print_meta(json_obj):
-        took = float(json_obj["took"]) / 1000
-        doc_count = json_obj["hits"]["total"]
-        print "\n%d docs hitted (%.3f sec)\n" % (doc_count, took)
+    def emit(json_obj):
+        output = []
+        field_order = []
+        if "aggregations" in json_obj:
+            (output, field_order) = TableOutput.print_aggr_output(json_obj)
+        else:
+            (output, field_order) = TableOutput.print_normal_output(json_obj)
+
+        TableOutput.print_output(output, field_order)
+        TableOutput.print_meta(json_obj, len(output))
 
     @staticmethod
-    def emit(json_obj):
-        if "aggregations" in json_obj:
-            TableOutput.print_aggr_output(json_obj)
-        else:
-            TableOutput.print_docs_output(json_obj)
-        TableOutput.print_meta(json_obj)
+    def print_meta(json_obj, row_count):
+        took = float(json_obj["took"]) / 1000
+        print "\n%d rows printed" % row_count
+        hitted_doc_count = json_obj["hits"]["total"]
+        print "%d docs hitted (%.3f sec)\n" % (hitted_doc_count, took)
 
     @staticmethod
     def print_aggr_output(json_obj):
@@ -85,8 +89,7 @@ class TableOutput:
         TableOutput.agg_output2arr(json_obj["aggregations"],
                                    aggr_output,
                                    field_order)
-
-        TableOutput.print_output(aggr_output, field_order)
+        return (aggr_output, field_order)
 
     @staticmethod
     # output: array of dict
@@ -174,83 +177,36 @@ class TableOutput:
                     docs.append(grp_by_fld_info.copy())
 
     @staticmethod
-    def print_docs_output(json_obj):
+    def print_normal_output(json_obj):
         if len(json_obj["hits"]["hits"]) == 0:
             print "Empty set\n"
-
-        TableOutput.id_max_len = len("_id")
-        TableOutput.type_max_len = len("_type")
-
-        field_len_map = TableOutput.get_field_len_map(json_obj)
-
-        if len(json_obj["hits"]["hits"]) > 0:
-            TableOutput.print_header(field_len_map)
-            TableOutput.print_data(field_len_map, json_obj)
-
-    @staticmethod
-    def get_field_len_map(json_obj):
-        ret_val = {}
-
-        # value들 간의 최대 문자열 길이
-        for doc in json_obj["hits"]["hits"]:
-            TableOutput.get_field_info(doc, ret_val)
-
-        return ret_val
-    
-    @staticmethod
-    def get_field_info(doc, ret_val):
-        source = doc["_source"]
-        for field in source:
-            if field not in ret_val:
-                ret_val[field] = {}
-
-                # value 길이와 field 길의 중 max 값
-                ret_val[field]['len'] = max(len(str(source[field])), len(field))
-                ret_val[field]['is_str'] = type(source[field]) == str
-            else:
-                if ret_val[field] < len(str(source[field])):
-                    ret_val[field]['len'] = len(str(source[field]))
+            return
         
-        # need to store max len of _id and _type so that print _id, _type
-        if TableOutput.print_id_type is True:
-            TableOutput.id_max_len = max(TableOutput.id_max_len,
-                                         len(str(doc["_id"])))
-
-            TableOutput.type_max_len = max(TableOutput.type_max_len,
-                                           len(str(doc["_type"])))
-
-
-    @staticmethod
-    def print_header(field_len_map):
-       
-        # print |_id|_type|field1|...|fieldn|
-        if TableOutput.print_id_type is True:
-            sys.stdout.write(("| %-" + str(TableOutput.id_max_len) + "s ") % "_id")
-            sys.stdout.write(("| %-" + str(TableOutput.type_max_len) + "s ") % "_type")
-        for k in field_len_map:
-            sys.stdout.write(("| %-" + str(field_len_map[k]["len"]) + "s ") % k)
-        sys.stdout.write("|\n")
+        normal_output = []
+        field_order = []    # field 출력 순서.
         
-        # print |---|----|...|---|
-        if TableOutput.print_id_type is True:
-            sys.stdout.write(("|%" + str(TableOutput.id_max_len) + "s") % ("-" * (TableOutput.id_max_len + 2)))
-            sys.stdout.write(("|%" + str(TableOutput.type_max_len) + "s") % ("-" * (TableOutput.type_max_len + 2)))
+        field_order_made = False
 
-        for k in field_len_map:
-            sys.stdout.write(("|%" + str(field_len_map[k]["len"]) + "s") % ("-" * (field_len_map[k]["len"] + 2)))
-        sys.stdout.write("|\n")
-
-    @staticmethod
-    def print_data(field_len_map, json_obj):
         for doc in json_obj["hits"]["hits"]:
+            row = {}
             if TableOutput.print_id_type is True:
-                TableOutput._print_id_type(doc)
+                row["_id"] = doc["_id"]
+                row["_type"] = doc["_type"]
 
-            source = doc["_source"]
-            for k in field_len_map:
-                TableOutput.print_field(field_len_map, k, source) 
-            sys.stdout.write("|\n")
+                if field_order_made == False:
+                    field_order.append("_id")
+                    field_order.append("_type")
 
+            row.update(doc["_source"])
+            
+            if field_order_made == False:
+                field_order += doc["_source"].keys()
+                field_order_made = True
+
+            normal_output.append(row)
+
+        return (normal_output, field_order)
+        
     @staticmethod
     def _print_id_type(doc):
         id_format = TableOutput.get_str_format(TableOutput.id_max_len, True)
@@ -269,15 +225,6 @@ class TableOutput:
             v = source[k]
         sys.stdout.write(str_format % v)
 
-    @staticmethod
-    def get_str_format(value_len, is_str):
-        # 문자열은 left align, 그외는 right align
-        align_sign = ""
-        if is_str == True:
-            align_sign = "-"
-
-        return "| %" + align_sign + str(value_len) + "s "
-        
 class SQLExecutor:
     def __init__(self, endpoint):
         self.http_client = HttpClient(endpoint)
