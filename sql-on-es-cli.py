@@ -94,24 +94,24 @@ class TableOutput:
     @staticmethod
     # output: array of dict
     def print_output(aggr_output, field_order):
-        field_name_len_map = TableOutput.__get_field_len_map(aggr_output,
+        field_name_len_map = TableOutput.get_field_len_map(aggr_output,
                                                              field_order)
         
-        TableOutput.__print_header(field_order, field_name_len_map)
-        TableOutput.__print_data(aggr_output, field_order, field_name_len_map)
+        TableOutput.print_header(field_order, field_name_len_map)
+        TableOutput.print_data(aggr_output, field_order, field_name_len_map)
 
     @staticmethod
-    def __get_field_len_map(aggr_output, field_order):
+    def get_field_len_map(aggr_output, field_order):
         field_name_len_map = {}
         for field in field_order:
             field_name_len_map[field] = len(field)
 
-        TableOutput.__set_field_name_len_map(aggr_output, field_name_len_map)
+        TableOutput.set_field_name_len_map(aggr_output, field_name_len_map)
 
         return field_name_len_map
     
     @staticmethod
-    def __print_header(field_order, field_name_len_map):
+    def print_header(field_order, field_name_len_map):
         # print |field1|field2|field2|...|fieldn|
         for k in field_order:
             sys.stdout.write(("| %-" + str(field_name_len_map[k]) + "s ") % k)
@@ -123,14 +123,14 @@ class TableOutput:
         sys.stdout.write("|\n")
     
     @staticmethod
-    def __print_data(aggr_output, field_order, field_name_len_map):
+    def print_data(aggr_output, field_order, field_name_len_map):
         for arr in aggr_output:
             for field in field_order:
                 sys.stdout.write(("| %"+str(field_name_len_map[field])+"s ") % str(arr[field]))
             sys.stdout.write("|\n")
 
     @staticmethod
-    def __set_field_name_len_map(output, field_name_len_map):
+    def set_field_name_len_map(output, field_name_len_map):
         for arr in output:
             for k in arr:
                 field_name_len_map[k] = max(field_name_len_map[k],
