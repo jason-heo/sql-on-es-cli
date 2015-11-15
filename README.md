@@ -20,6 +20,10 @@ SQL> SELECT zipcode, area_depth1 FROM jsheo LIMIT 5
 Limitations
 ===========
 
+- No semi colomn(`;`)
+    - Don't insert `;` end of SQL
+    - Just Enter
+- Every SQL should written in one line
 - Only tested with Elasticseach 1.7
 - Only tested with primitive data types
 
