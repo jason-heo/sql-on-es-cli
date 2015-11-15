@@ -29,7 +29,7 @@ Installation
 Install elasticsearch-SQL
 -------------------------
 
-1. install [elasticsearch-SQL](https://github.com/NLPchina/elasticsearch-sql/) into your Elasticsearch
+install [elasticsearch-SQL](https://github.com/NLPchina/elasticsearch-sql/) into your Elasticsearch
 
 Install CLI
 -----------
