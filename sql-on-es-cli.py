@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 
 import sys
 import readline
@@ -8,6 +8,9 @@ import json
 import httplib
 import urlparse
 import urllib
+
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
 def print_usage():
         sys.stderr.write("Usage: {0} <endpoint> [-j]\n".format(sys.argv[0]))
