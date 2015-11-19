@@ -272,7 +272,7 @@ class SQLExecutor:
 
 def print_es_error(json_obj):
     print "status: " + str(json_obj.get("status", 200))
-    print "error: " + json_obj.get("error", "")
+    print "error: " + str(json_obj.get("error", ""))
 
 if __name__ == "__main__":
     endpoint, output_mode = parseopt()
